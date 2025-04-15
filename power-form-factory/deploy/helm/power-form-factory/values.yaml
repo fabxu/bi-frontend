@@ -1,0 +1,127 @@
+# Default values for power-form-factory.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+## @param replicaCount Number of Frontend service replicas
+##
+replicaCount: 1
+
+## Frontend image version
+## @param image.repository Frontend image repository
+## @param image.tag Frontend image tag
+image:
+  repository: registry.sensetime.com/beacon/apcloud/app/power-form-factory-frontend
+  tag: 1.0.0
+  ## Specify a imagePullPolicy
+  ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
+  ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+  ##
+  pullPolicy: Always
+
+## @section parameters
+## @param imagePullSecrets Docker registry secret names as an array
+imagePullSecrets:
+  - name: inner
+  - name: regcred-sensetime
+
+## nginx.conf config
+nginx:
+  config: |
+    server {
+      listen 80;
+      server_name localhost;
+
+      # Root directory for your application
+      root /usr/share/nginx/html;
+
+      # Index file
+      index index.html;
+
+      location / {
+          try_files $uri $uri/ /index.html;
+      }
+
+      # Optional: Add gzip compression for faster loading
+      gzip on;
+      gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+      gzip_min_length 256;
+    }
+## @param nameOverride String to partially override common.names.fullname template (will maintain the release name)
+##
+nameOverride: "power-form-factory"
+## @param fullnameOverride String to fully override common.names.fullname template
+##
+fullnameOverride: "power-form-factory"
+
+## Frontend service parameters
+service:
+  ## @param service.type Frontend service type
+  ##
+  type: ClusterIP
+  ## @param service.port.http Frontend service HTTP port
+  ##
+  port:
+    http: 80
+  ## Node ports to expose
+  ## @param service.nodePorts.http Node port for HTTP
+  ## NOTE: choose port between <30000-32767>
+  ##
+  nodePorts:
+    http: ""
+
+## Frontend ingress parameters
+## ref: https://kubernetes.io/docs/user-guide/ingress/
+##
+ingress:
+  ## @param ingress.enabled Enable ingress record generation for Frontend
+  ##
+  enabled: false
+  ## @param ingress.annotations [object] Additional annotations for the Ingress resource. To enable certificate autogeneration, place here your cert-manager annotations.
+  ## Use this parameter to set the required annotations for cert-manager, see
+  ## ref: https://cert-manager.io/docs/usage/ingress/#supported-annotations
+  ## e.g:
+  ## annotations:
+  ##   kubernetes.io/ingress.class: nginx
+  ##   cert-manager.io/cluster-issuer: cluster-issuer-name
+  ##
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths: []
+  ## @param ingress.tls Enable TLS configuration for the host defined at `ingress.hostname` parameter
+  ## TLS certificates will be retrieved from a TLS secret with name: `{{- printf "%s-tls" .Values.ingress.hostname }}`
+  ## You can:
+  ##   - Use the `ingress.secrets` parameter to create this TLS secret
+  ##   - Rely on cert-manager to create it by setting the corresponding annotations
+  ##   - Rely on Helm to create self-signed certificates by setting `ingress.selfSigned=true`
+  ##
+  tls: []
+
+## Frontend resource requests and limits
+## ref: https://kubernetes.io/docs/user-guide/compute-resources/
+## @param resources.limits The resources limits for the container
+## @param resources.requests The requested resources for the container
+##
+resources:
+  limits:
+    cpu: 2
+    memory: 1Gi
+  requests:
+    cpu: 1
+    memory: 1Gi
+
+## @param mnodeSelector Node labels for pod assignment
+## Ref: https://kubernetes.io/docs/user-guide/node-selection/
+##
+nodeSelector: {}
+
+## @param tolerations Tolerations for pod assignment
+## Ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+##
+tolerations: []
+
+## @param affinity Affinity for pod assignment
+## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+## Note: podAffinityPreset, podAntiAffinityPreset, and nodeAffinityPreset will be ignored when it's set
+##
+affinity: {}

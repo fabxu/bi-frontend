@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "power-form-factory.fullname" . }}-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "power-form-factory.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port.http }}
+      targetPort: 80
+      {{- if (and (eq .Values.service.type "NodePort") (not (empty .Values.service.nodePorts.http))) }}
+      nodePort: {{ .Values.service.nodePorts.http }}
+      {{- end }}
+  selector:
+    {{- include "power-form-factory.selectorLabels" . | nindent 4 }}

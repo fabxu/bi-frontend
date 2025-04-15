@@ -1,0 +1,7 @@
+{
+  "npmClient": "pnpm",
+  "packages": [
+    "packages/element-ui"
+  ],
+  "version": "100.1.10"
+}

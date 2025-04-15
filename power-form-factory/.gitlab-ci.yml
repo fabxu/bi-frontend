@@ -1,0 +1,119 @@
+# A pipeline is composed of independent jobs that run scripts, grouped into stages.
+# Stages run in sequential order, but jobs within stages run in parallel.
+#
+# For more information, see: https://docs.gitlab.com/ee/ci/yaml/index.html#stages
+#
+# You can copy and paste this template into a new `.gitlab-ci.yml` file.
+# You should not add this template to an existing `.gitlab-ci.yml` file by using the `include:` keyword.
+#
+# To contribute improvements to CI/CD templates, please follow the Development guide at:
+# https://docs.gitlab.com/ee/development/cicd/templates.html
+# This specific template is located at:
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
+
+stages:          # List of stages for jobs, and their order of execution
+  - install
+  - package
+  - build
+  - deploy
+
+variables:
+  VERSION: '1.0.0'
+  IMAGE: 'registry.sensetime.com/beacon/apcloud/app/power-form-factory-frontend:$VERSION'
+  CACHE_KEY_NODE_MODULES: 'node_modules--$CI_COMMIT_REF_SLUG-$CI_PROJECT_DIR'
+
+install-dependencies-x86:
+  image: registry.sensetime.com/its-pkg/node:18.18.0-alpine
+  stage: install
+  script:
+    - npx yarn install
+  artifacts:
+      paths:
+        - node_modules/
+  cache:
+    key: $CACHE_KEY_NODE_MODULES
+    paths:
+      - node_modules/
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - changes:
+        - yarn.lock
+
+build-package-x86:
+  image: registry.sensetime.com/its-pkg/node:18.18.0-alpine
+  stage: package
+  script:
+    - npx yarn build
+  artifacts:
+      paths:
+        - dist/
+  cache:
+    key: $CACHE_KEY_NODE_MODULES
+    paths:
+      - node_modules/
+  only:
+    - dev
+    - main
+  dependencies:
+    - install-dependencies-x86
+
+build-image-x86:
+  image: registry.sensetime.com/docker.io/docker:19.03.8
+  stage: build
+  before_script:
+    - docker info
+    - docker login -u ${VIPER_ROBOT_DOCKER_USERNAME} -p ${VIPER_ROBOT_DOCKER_PASSWD} registry.sensetime.com
+  script:
+    - if [ "$CI_COMMIT_BRANCH" == "main" ]; then
+        current_image_name=$IMAGE-$CI_COMMIT_SHORT_SHA;
+      else
+        current_image_name=$IMAGE-$CI_COMMIT_SHORT_SHA-$CI_COMMIT_BRANCH;
+      fi
+    - DOCKER_BUILDKIT=0 docker build -t $current_image_name .
+    - docker push $current_image_name
+  only:
+    - dev
+    - main
+  dependencies:
+    - build-package-x86
+
+
+beta:deploy:
+  image: registry.sensetime.com/beacon/ci/deploy:2.0.0
+  stage: deploy
+  before_script:
+    - mkdir /root/.kube/ && echo "$K8S_CONFIG" > /root/.kube/config
+  script:
+    - - echo "Star to deploy application..."
+    - |
+      if [ "$CI_COMMIT_BRANCH" == "main" ]; then
+        image_tag=$VERSION-$CI_COMMIT_SHORT_SHA;
+      else
+        image_tag=$VERSION-$CI_COMMIT_SHORT_SHA-$CI_COMMIT_BRANCH;
+      fi
+      sed -i "s#tag:.*#tag: $image_tag#g" ./deploy/helm/$CI_PROJECT_NAME/values.yaml
+    - helm upgrade --wait --timeout=120s --install -n web-beta $CI_PROJECT_NAME ./deploy/helm/$CI_PROJECT_NAME/ -f ./deploy/helm/$CI_PROJECT_NAME/values.yaml
+  only:
+    - dev
+  dependencies:
+    - build-image-x86
+
+prod:deploy:
+  image: registry.sensetime.com/beacon/ci/deploy:2.0.0
+  stage: deploy
+  before_script: []
+  script:
+    - echo "Star to deploy application..."
+    - |
+      if [ "$CI_COMMIT_BRANCH" == "main" ]; then
+        image_tag=$VERSION-$CI_COMMIT_SHORT_SHA;
+      else
+        image_tag=$VERSION-$CI_COMMIT_SHORT_SHA-$CI_COMMIT_BRANCH;
+      fi
+      sed -i "s#tag:.*#tag: $image_tag#g" ./deploy/helm/$CI_PROJECT_NAME/values.yaml
+    - helm upgrade --wait --timeout=120s --install -n web-service $CI_PROJECT_NAME ./deploy/helm/$CI_PROJECT_NAME/ -f ./deploy/helm/$CI_PROJECT_NAME/values.yaml
+  only:
+    - main
+  dependencies:
+    - build-image-x86
